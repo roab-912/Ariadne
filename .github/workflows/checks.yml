@@ -1,4 +1,4 @@
-name: V0.1 checks
+name: V0.2.0 checks
 on: [push, pull_request]
 jobs:
   foundations:

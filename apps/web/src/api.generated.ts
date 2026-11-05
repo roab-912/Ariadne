@@ -192,6 +192,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/runs/{run_id}/transactions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Run Transactions */
+        get: operations["run_transactions_api_v1_runs__run_id__transactions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -215,6 +232,25 @@ export interface components {
             start: number;
             /** End */
             end: number;
+        };
+        /** BundleView */
+        BundleView: {
+            /** Id */
+            id: string;
+            /** Chain Id */
+            chain_id: string;
+            /** Block Hash */
+            block_hash: string;
+            /** Block Number */
+            block_number: string;
+            /** Tx Hash */
+            tx_hash: string;
+            /** Transaction Status */
+            transaction_status: number;
+            /** Snapshot Id */
+            snapshot_id: string;
+            /** Normalization Limits */
+            normalization_limits: string[];
         };
         /** Capabilities */
         Capabilities: {
@@ -271,16 +307,16 @@ export interface components {
         CapabilityView: {
             /**
              * Version
-             * @default 0.1.0
+             * @default 0.2.0
              * @constant
              */
-            version: "0.1.0";
+            version: "0.2.0";
             /**
              * Mode
-             * @default local_foundation
+             * @default local_ethereum
              * @constant
              */
-            mode: "local_foundation";
+            mode: "local_ethereum";
             /** Notice */
             notice: string;
             /** Providers */
@@ -399,6 +435,8 @@ export interface components {
             /** Is Demo */
             is_demo: boolean;
             asset: components["schemas"]["AssetView"];
+            /** Bundle Id */
+            bundle_id?: string | null;
         };
         /** OperationView */
         OperationView: {
@@ -418,6 +456,15 @@ export interface components {
             is_demo: boolean;
             /** Movements */
             movements: components["schemas"]["MovementView"][];
+        };
+        /** RunCreate */
+        RunCreate: {
+            block_range?: components["schemas"]["BlockRange"] | null;
+            /**
+             * Max Transactions
+             * @default 10
+             */
+            max_transactions: number;
         };
         /** RunView */
         RunView: {
@@ -710,7 +757,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["RunCreate"] | null;
+            };
+        };
         responses: {
             /** @description Successful Response */
             201: {
@@ -877,6 +928,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SnapshotView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    run_transactions_api_v1_runs__run_id__transactions_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BundleView"][];
                 };
             };
             /** @description Validation Error */

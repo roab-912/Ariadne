@@ -207,9 +207,13 @@ def collect_run(session, run: AnalysisRun, provider: EthereumProvider, request):
         reasons.extend(limits)
         finality = {"status": "unknown", "policy": "ethereum_safe_finalized_tags", "heads": heads,
                     "observed_at": result.retrieved_at.isoformat()}
-        if heads.get("finalized") and int(heads["finalized"]["number"]) >= normalized.block_number:
+        def covers_inclusion(tag):
+            value = heads.get(tag)
+            return value and (int(value["number"]) > normalized.block_number
+                or (int(value["number"]) == normalized.block_number and value["hash"] == normalized.block_hash))
+        if covers_inclusion("finalized"):
             finality["status"] = "finalized"
-        elif heads.get("safe") and int(heads["safe"]["number"]) >= normalized.block_number:
+        elif covers_inclusion("safe"):
             finality["status"] = "safe"
         if finality["status"] != "finalized":
             reasons.append("finality_not_finalized_at_collection")

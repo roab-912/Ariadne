@@ -6,7 +6,7 @@ import re
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from urllib.parse import urlsplit
+from urllib.parse import parse_qsl, quote, unquote, urlsplit
 
 from connectors.contracts import BlockRange, Capabilities, ProviderResult
 from connectors.transport import BoundedHTTP, Budget, ProviderError
@@ -61,7 +61,11 @@ class EthereumSettings:
 class EthereumProvider:
     def __init__(self, settings: EthereumSettings, *, transport=None, budget=None):
         self.settings = settings
-        self.http = BoundedHTTP(budget or Budget(), transport, (settings.rpc_url, settings.etherscan_api_key))
+        endpoint = urlsplit(settings.rpc_url)
+        path_values = [unquote(value) for value in endpoint.path.split("/") if value and value.lower() not in
+            {"v1", "v2", "v3", "api", "rpc", "json-rpc", "eth", "ethereum", "mainnet"}]
+        secrets = [settings.rpc_url, settings.etherscan_api_key, *path_values, *(value for _, value in parse_qsl(endpoint.query))]
+        self.http = BoundedHTTP(budget or Budget(), transport, tuple([*secrets, *(quote(value, safe="") for value in secrets if value)]))
         self.checked_chain = False
         self.last_index_call = 0.0
 
@@ -161,6 +165,15 @@ class EthereumProvider:
                     result[tag] = {"number": str(hex_int(block["number"])), "hash": hash_value(block["hash"])}
                 except (ProviderError, KeyError, TypeError) as error:
                     limits.append(f"{tag}_unavailable")
+            for tag in ("safe", "finalized"):
+                if tag in result and ("latest" not in result or int(result[tag]["number"]) > int(result["latest"]["number"])
+                    or (result[tag]["number"] == result["latest"]["number"] and result[tag]["hash"] != result["latest"]["hash"])):
+                    result.pop(tag)
+                    limits.append("inconsistent_finality_heads")
+            if "safe" in result and "finalized" in result and (int(result["finalized"]["number"]) > int(result["safe"]["number"])
+                or (result["finalized"]["number"] == result["safe"]["number"] and result["finalized"]["hash"] != result["safe"]["hash"])):
+                result.pop("finalized")
+                limits.append("inconsistent_finality_heads")
             return self._result(start, data=result, status=CoverageStatus.PARTIAL if limits else CoverageStatus.COMPLETE, limits=limits)
         except ProviderError as error:
             return self._result(start, status=CoverageStatus.UNSUPPORTED if not self.settings.rpc_url else CoverageStatus.PARTIAL, limits=[error.reason])
@@ -232,9 +245,14 @@ class EthereumProvider:
                 raise ProviderError("invalid_indexer_page_size")
             previous = low
             for row in rows:
+                if not isinstance(row, dict) or not isinstance(row.get("blockNumber"), str) or not re.fullmatch(r"0|[1-9][0-9]*", row["blockNumber"]):
+                    raise ProviderError("invalid_indexer_row")
                 number = int(row["blockNumber"])
                 hash_value(row["hash"])
-                if not low <= number <= high or number < previous or raw_address.lower() not in (row.get("from", "").lower(), row.get("to", "").lower()):
+                parties = [row.get("from"), row.get("to")]
+                if any(value is not None and not isinstance(value, str) for value in parties):
+                    raise ProviderError("invalid_indexer_row")
+                if not low <= number <= high or number < previous or raw_address.lower() not in [(value or "").lower() for value in parties]:
                     raise ProviderError("indexer_row_outside_scope")
                 previous = number
             limits = list(cumulative_limits)

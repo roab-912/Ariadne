@@ -1,9 +1,9 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "Ariadne — Fondations V0.1",
-    "description": "Application locale sans authentification. Données synthétiques marquées Démonstration. Aucune collecte blockchain ni analyse automatique. Ne pas exposer publiquement.",
-    "version": "0.1.0"
+    "title": "Ariadne — Ethereum V0.2.0",
+    "description": "Application locale sans authentification. Données synthétiques marquées Démonstration. Collecte Ethereum synchrone bornée, si configurée côté serveur. Ne pas exposer publiquement.",
+    "version": "0.2.0"
   },
   "paths": {
     "/health/live": {
@@ -220,6 +220,23 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/RunCreate"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
             "description": "Successful Response",
@@ -465,6 +482,72 @@
           }
         }
       }
+    },
+    "/api/v1/runs/{run_id}/transactions": {
+      "get": {
+        "summary": "Run Transactions",
+        "operationId": "run_transactions_api_v1_runs__run_id__transactions_get",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Run Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/BundleView"
+                  },
+                  "title": "Response Run Transactions Api V1 Runs  Run Id  Transactions Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -535,6 +618,57 @@
           "end"
         ],
         "title": "BlockRange"
+      },
+      "BundleView": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "chain_id": {
+            "type": "string",
+            "title": "Chain Id"
+          },
+          "block_hash": {
+            "type": "string",
+            "title": "Block Hash"
+          },
+          "block_number": {
+            "type": "string",
+            "title": "Block Number"
+          },
+          "tx_hash": {
+            "type": "string",
+            "title": "Tx Hash"
+          },
+          "transaction_status": {
+            "type": "integer",
+            "title": "Transaction Status"
+          },
+          "snapshot_id": {
+            "type": "string",
+            "title": "Snapshot Id"
+          },
+          "normalization_limits": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Normalization Limits"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "chain_id",
+          "block_hash",
+          "block_number",
+          "tx_hash",
+          "transaction_status",
+          "snapshot_id",
+          "normalization_limits"
+        ],
+        "title": "BundleView"
       },
       "Capabilities": {
         "properties": {
@@ -632,15 +766,15 @@
         "properties": {
           "version": {
             "type": "string",
-            "const": "0.1.0",
+            "const": "0.2.0",
             "title": "Version",
-            "default": "0.1.0"
+            "default": "0.2.0"
           },
           "mode": {
             "type": "string",
-            "const": "local_foundation",
+            "const": "local_ethereum",
             "title": "Mode",
-            "default": "local_foundation"
+            "default": "local_ethereum"
           },
           "notice": {
             "type": "string",
@@ -901,6 +1035,17 @@
           },
           "asset": {
             "$ref": "#/components/schemas/AssetView"
+          },
+          "bundle_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bundle Id"
           }
         },
         "type": "object",
@@ -988,6 +1133,30 @@
           "movements"
         ],
         "title": "OperationView"
+      },
+      "RunCreate": {
+        "properties": {
+          "block_range": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BlockRange"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "max_transactions": {
+            "type": "integer",
+            "maximum": 20.0,
+            "minimum": 1.0,
+            "title": "Max Transactions",
+            "default": 10
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "RunCreate"
       },
       "RunView": {
         "properties": {

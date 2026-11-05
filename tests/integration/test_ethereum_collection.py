@@ -125,7 +125,7 @@ def test_address_history_keeps_verified_prefix_on_pagination_failure(db, live_cl
         assert ("provider_rate_limited" in run["stop_reasons"]) is rate_limit
         operations = client.get(f'/api/v1/runs/{run["id"]}/operations').json()
         assert len(operations) == 1 and operations[0]["movements"][0]["observation"]["amount_raw"] == "13230000000000000"
-        assert run["coverage"]["discovery"][0]["pages"] == 2
+        assert run["coverage"]["discovery"][0]["pages"] == (2 if rate_limit else 3)
         assert seen[:2] == [("txlist", "1"), ("txlist", "2")]
         for item in run["manifest"]:
             assert "SECRET_KEY_DO_NOT_EXPOSE" not in client.get(f'/api/v1/snapshots/{item["snapshot_id"]}').text
@@ -174,3 +174,37 @@ def test_empty_address_history_is_complete_only_inside_declared_scope(db, live_c
     assert run["coverage"]["discovery"][0]["finished"] is True
     assert client.get(f'/api/v1/runs/{run["id"]}/transactions').json() == []
     assert collect(client, identity, key="changed-bounds", body={"block_range": {"start": 1, "end": 2}}).status_code == 422
+
+
+def test_conflicting_rpc_value_does_not_overwrite_stored_observation(db, live_client):
+    client, initial = live_client
+    seed_demo(db)
+    identity = make_case(client)
+    original = collect(client, identity).json()
+    def changed_transaction(body):
+        if body["method"] == "eth_getTransactionByHash":
+            value = {**fixture("native")["bundle"]["transaction"], "value": "0x1"}
+            return httpx.Response(200, json={"jsonrpc": "2.0", "id": body["id"], "result": value})
+    provider = replay_provider(rpc_handler=changed_transaction)
+    app.dependency_overrides[get_provider] = lambda: provider
+    try:
+        run = collect(client, identity, key="contradiction").json()
+        assert run["coverage_status"] == "partial" and "conflicting_existing_bundle" in run["stop_reasons"]
+        assert client.get(f'/api/v1/runs/{run["id"]}/operations').json() == []
+        old = client.get(f'/api/v1/runs/{original["id"]}/operations').json()
+        assert old[0]["movements"][0]["observation"]["amount_raw"] == "13230000000000000"
+    finally:
+        provider.close()
+
+
+def test_concurrent_collection_is_rejected_before_provider_calls(db, pg_engine, live_client):
+    client, provider = live_client
+    seed_demo(db)
+    identity = make_case(client)
+    with pg_engine.connect() as connection:
+        transaction = connection.begin()
+        connection.exec_driver_sql("SELECT pg_advisory_xact_lock(672914020)")
+        response = collect(client, identity)
+        assert response.status_code == 409 and provider.http.budget.calls == 0
+        transaction.rollback()
+    assert collect(client, identity).status_code == 201

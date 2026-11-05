@@ -289,6 +289,73 @@ main {
   flex-shrink:0;
 }
 
+.collection-banner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 13px 17px;
+  margin-bottom: 26px;
+  border: 1px solid #b8d8ce;
+  border-radius: 6px;
+  background: #eef8f3;
+  color: #285b50;
+  font-size: 12px;
+}
+
+.block-range {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.block-range p {
+  grid-column: 1 / -1;
+}
+
+.run-toolbar {
+  flex-wrap: wrap;
+}
+
+.count-input {
+  width: 70px;
+}
+
+.availability-note {
+  margin-top: 14px;
+  color: #705c23;
+}
+
+.proof-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin: 16px 19px;
+  color: #637789;
+  font-size: 11px;
+}
+
+.proof-picker select {
+  width: 100%;
+  font-size: 11px;
+}
+
+.transactions {
+  margin-top: 23px;
+}
+
+.transaction-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  padding: 13px 19px;
+  border-bottom: 1px solid #e8edef;
+  font-size: 12px;
+}
+
+.more-button {
+  margin: 15px 19px;
+}
+
 .page-heading {
   display:flex;
   align-items:flex-start;

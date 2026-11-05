@@ -33,6 +33,8 @@ services:
       DB_PASSWORD: ${POSTGRES_PASSWORD:-ariadne_local_only}
       DB_NAME: ${POSTGRES_DB:-ariadne}
       REDIS_URL: redis://redis:6379/0
+      ETHEREUM_RPC_URL: ${ETHEREUM_RPC_URL:-}
+      ETHERSCAN_API_KEY: ${ETHERSCAN_API_KEY:-}
     command: ["alembic", "upgrade", "head"]
     depends_on:
       postgres:

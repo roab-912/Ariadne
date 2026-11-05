@@ -15,7 +15,8 @@ def get(path):
 
 assert get("/health/ready")["status"] == "ok"
 caps = get("/api/v1/capabilities")
-assert all(provider["status"] == "unsupported" for provider in caps["providers"])
+assert caps["version"] == "0.2.0"
+assert all(provider["status"] == "unsupported" for provider in caps["providers"] if provider["chain_id"] != "eip155:1")
 cases = get("/api/v1/cases")
 case = next(item for item in cases if item["is_demo"])
 detail = get(f'/api/v1/cases/{case["id"]}')
@@ -30,4 +31,4 @@ assert "1000000000000000001" in [movement["amount_raw"] for movement in movement
 snapshot = get(f'/api/v1/snapshots/{movements[0]["snapshot_id"]}')
 canonical = json.dumps(snapshot["content"], ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
 assert hashlib.sha256(canonical).hexdigest() == snapshot["sha256"] == run["manifest"][0]["sha256"]
-print("V0.1 OK : PostgreSQL/Redis, Démonstration, montants exacts, preuves et couverture explicite.")
+print("V0.2.0 OK : PostgreSQL/Redis, Démonstration séparée, montants exacts, preuves et couverture explicite.")

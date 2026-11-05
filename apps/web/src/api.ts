@@ -7,12 +7,14 @@ export type Operation = components['schemas']['OperationView'];
 export type Snapshot = components['schemas']['SnapshotView'];
 export type Capabilities = components['schemas']['CapabilityView'];
 export type CaseCreate = components['schemas']['CaseCreate'];
+export type Bundle = components['schemas']['BundleView'];
 
 export async function api<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`/api/v1${path}`, options);
   if (!response.ok) {
     const body = await response.json().catch(() => null);
-    throw new Error(typeof body?.detail === 'string' ? body.detail : `Requête refusée (${response.status})`);
+    const detail = Array.isArray(body?.detail) ? body.detail.map((item: { msg: string }) => item.msg).join(' · ') : body?.detail;
+    throw new Error(typeof detail === 'string' ? detail : `Requête refusée (${response.status})`);
   }
   return response.json() as Promise<T>;
 }
