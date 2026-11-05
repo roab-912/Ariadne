@@ -1,4 +1,4 @@
-"""Schéma V0.1. Aucune collecte, attribution ou allocation automatique."""
+"""Persistance des pièces, observations et analyses, avec provenance séparée."""
 from datetime import datetime, timezone
 from decimal import Decimal
 from uuid import uuid4
@@ -113,6 +113,31 @@ class Observation(Base):
     amount_raw: Mapped[int] = mapped_column(UInt256())
     snapshot_id: Mapped[str] = mapped_column(ForeignKey("source_snapshots.id"))
     evidence_ref: Mapped[str] = mapped_column(String(200))
+    bundle_id: Mapped[str | None] = mapped_column(ForeignKey("transaction_bundles.id"))
+    asset_metadata: Mapped[dict | None] = mapped_column(JSON)
+
+
+class TransactionBundle(Base):
+    """Transaction/reçu/logs/bloc conservés dans une pièce, y compris sans mouvement."""
+    __tablename__ = "transaction_bundles"
+    __table_args__ = (
+        UniqueConstraint("chain_id", "block_hash", "tx_hash"),
+        CheckConstraint("transaction_status IN (0, 1)", name="bundle_transaction_status"),
+    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    chain_id: Mapped[str] = mapped_column(ForeignKey("chains.id"))
+    block_hash: Mapped[str] = mapped_column(String(66))
+    block_number: Mapped[int] = mapped_column(Numeric(20, 0))
+    tx_hash: Mapped[str] = mapped_column(String(66), index=True)
+    transaction_status: Mapped[int] = mapped_column(Integer)
+    snapshot_id: Mapped[str] = mapped_column(ForeignKey("source_snapshots.id"))
+    normalization_limits: Mapped[list] = mapped_column(JSON)
+
+
+class RunBundle(Base):
+    __tablename__ = "run_bundles"
+    run_id: Mapped[str] = mapped_column(ForeignKey("analysis_runs.id"), primary_key=True)
+    bundle_id: Mapped[str] = mapped_column(ForeignKey("transaction_bundles.id"), primary_key=True)
 
 
 class Operation(Base):

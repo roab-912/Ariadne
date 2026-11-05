@@ -7,22 +7,38 @@ from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from connectors.contracts import UnavailableProvider
+from connectors.ethereum import EthereumProvider, EthereumSettings
+from investigation.collection import collect_run, seed_range
 from investigation.db import get_session
 from investigation.models import (
     AnalysisRun, Asset, Case, CaseSeed, Chain, Observation, Operation,
-    OperationMovement, RunOperation, SourceSnapshot,
+    OperationMovement, RunOperation, SourceSnapshot, RunBundle, TransactionBundle,
 )
 from investigation.schemas import (
     AssetView, CapabilityView, CaseCreate, CaseDetail, CaseView, MovementView,
-    ObservationView, OperationView, RunView, SeedView, SnapshotView,
+    ObservationView, OperationView, RunView, SeedView, SnapshotView, RunCreate, BundleView,
 )
 
-app = FastAPI(title="Ariadne — Fondations V0.1", version="0.1.0", description=(
+app = FastAPI(title="Ariadne — Ethereum V0.2.0", version="0.2.0", description=(
     "Application locale sans authentification. Données synthétiques marquées Démonstration. "
-    "Aucune collecte blockchain ni analyse automatique. Ne pas exposer publiquement."
+    "Collecte Ethereum synchrone bornée, si configurée côté serveur. Ne pas exposer publiquement."
 ))
 Db = Annotated[Session, Depends(get_session)]
+
+
+def get_provider():
+    try:
+        settings = EthereumSettings.from_env()
+    except ValueError:
+        raise HTTPException(503, "Configuration des fournisseurs invalide") from None
+    provider = EthereumProvider(settings)
+    try:
+        yield provider
+    finally:
+        provider.close()
+
+
+Provider = Annotated[EthereumProvider, Depends(get_provider)]
 
 
 def required(session, model, identity):
@@ -34,7 +50,7 @@ def required(session, model, identity):
 
 @app.get("/health/live")
 def live() -> dict[str, str]:
-    return {"status": "ok", "version": "0.1.0"}
+    return {"status": "ok", "version": "0.2.0"}
 
 
 @app.get("/health/ready")
@@ -45,7 +61,7 @@ def ready(session: Db):
     try:
         session.execute(text("SELECT 1"))
         checks["postgres"] = True
-        checks["migration"] = session.execute(text("SELECT version_num FROM alembic_version")).scalar() == "0001"
+        checks["migration"] = session.execute(text("SELECT version_num FROM alembic_version")).scalar() == "0002"
     except SQLAlchemyError:
         session.rollback()
     try:
@@ -57,10 +73,9 @@ def ready(session: Db):
 
 
 @app.get("/api/v1/capabilities", response_model=CapabilityView)
-def capabilities() -> CapabilityView:
-    provider = UnavailableProvider()
+def capabilities(provider: Provider) -> CapabilityView:
     return CapabilityView(
-        notice="V0.1 locale · Démonstration synthétique disponible · Aucun réseau réellement collecté",
+        notice="V0.2.0 locale · Ethereum borné si fournisseurs configurés · Démonstration synthétique séparée",
         providers=[provider.get_capabilities(chain) for chain in ("eip155:1", "eip155:8453", "eip155:42161")],
     )
 
@@ -94,7 +109,9 @@ def case_detail(case_id: str, session: Db):
 
 
 @app.post("/api/v1/cases/{case_id}/runs", response_model=RunView, status_code=201)
-def create_run(case_id: str, session: Db, idempotency_key: Annotated[str, Header(min_length=1, max_length=100)]):
+def create_run(case_id: str, session: Db, provider: Provider,
+    idempotency_key: Annotated[str, Header(min_length=1, max_length=100)], body: RunCreate | None = None):
+    request = body or RunCreate()
     case = required(session, Case, case_id)
     # Les runs du scénario synthétique sont uniquement chargés depuis le fixture.
     if case.is_demo:
@@ -102,17 +119,28 @@ def create_run(case_id: str, session: Db, idempotency_key: Annotated[str, Header
     lookup = select(AnalysisRun).where(AnalysisRun.case_id == case_id, AnalysisRun.idempotency_key == idempotency_key)
     existing = session.scalar(lookup)
     if existing:
+        if existing.parameters.get("request") not in (None, request.model_dump(mode="json")):
+            raise HTTPException(409, "Cette clé d'idempotence est déjà associée à d'autres paramètres")
         return existing
     seeds = [SeedView.model_validate(seed).model_dump() for seed in session.scalars(select(CaseSeed).where(CaseSeed.case_id == case_id).order_by(CaseSeed.id))]
+    for seed in seeds:
+        try:
+            seed_range(seed, request.block_range)
+        except ValueError:
+            raise HTTPException(422, "Les bornes du run doivent correspondre aux bornes de la graine") from None
+    # Une seule collecte simultanée sur cette instance locale : pas de scheduler V0.3 implicite.
+    if not session.execute(text("SELECT pg_try_advisory_xact_lock(672914020)" )).scalar():
+        raise HTTPException(409, "Une collecte locale est déjà en cours ; réessayer avec la même clé")
     run = AnalysisRun(
         case_id=case_id, idempotency_key=idempotency_key, state="unsupported",
         coverage_status="unsupported", is_demo=False, seeds_snapshot=seeds,
         parameters={"mode": "snapshot_only", "provider_calls": 0}, block_bounds={},
         allocation_policy="none", decoder_versions={}, label_snapshot=[],
-        coverage={"scope": "none", "limits": ["Collecte et analyse non implémentées en V0.1"]},
-        stop_reasons=["provider_not_configured", "analysis_not_implemented_v0_1"], manifest=[],
+        coverage={"scope": "none", "limits": []}, stop_reasons=[], manifest=[],
     )
     session.add(run)
+    session.flush()
+    collect_run(session, run, provider, request)
     try:
         session.commit()
     except IntegrityError:
@@ -135,7 +163,7 @@ def observation_view(session: Session, observation: Observation) -> ObservationV
     values["block_number"] = str(observation.block_number)
     return ObservationView(
         **values, is_demo=required(session, SourceSnapshot, observation.snapshot_id).is_demo,
-        asset=AssetView.model_validate(required(session, Asset, observation.asset_id)),
+        asset=AssetView.model_validate(observation.asset_metadata or required(session, Asset, observation.asset_id)),
     )
 
 
@@ -167,3 +195,12 @@ def observation_detail(observation_id: str, session: Db):
 @app.get("/api/v1/snapshots/{snapshot_id}", response_model=SnapshotView)
 def snapshot_detail(snapshot_id: str, session: Db):
     return required(session, SourceSnapshot, snapshot_id)
+
+
+@app.get("/api/v1/runs/{run_id}/transactions", response_model=list[BundleView])
+def run_transactions(run_id: str, session: Db, limit: int = Query(50, ge=1, le=100), offset: int = Query(0, ge=0)):
+    required(session, AnalysisRun, run_id)
+    bundles = session.scalars(select(TransactionBundle).join(RunBundle).where(RunBundle.run_id == run_id)
+        .order_by(TransactionBundle.block_number, TransactionBundle.tx_hash).offset(offset).limit(limit))
+    return [BundleView(**{column.name: (str(item.block_number) if column.name == "block_number" else getattr(item, column.name))
+                         for column in item.__table__.columns}) for item in bundles]

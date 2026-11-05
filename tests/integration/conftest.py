@@ -22,7 +22,11 @@ def pg_engine():
     config = Config("alembic.ini")
     with engine.begin() as connection:
         config.attributes["connection"] = connection
+        command.upgrade(config, "0001")
+        connection.exec_driver_sql("INSERT INTO cases (id, title, description, created_at, is_demo) VALUES ('migration-preservation', 'V0.1', '', CURRENT_TIMESTAMP, false)")
         command.upgrade(config, "head")
+        assert connection.exec_driver_sql("SELECT title FROM cases WHERE id = 'migration-preservation'").scalar() == "V0.1"
+        connection.exec_driver_sql("DELETE FROM cases WHERE id = 'migration-preservation'")
         command.check(config)
         command.downgrade(config, "base")
         command.upgrade(config, "head")

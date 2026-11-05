@@ -31,11 +31,18 @@ class SeedInput(BaseModel):
     def validate_reference(self):
         import re
         if not self.chain_id.startswith("eip155:"):
-            raise ValueError("Graines non EVM non prises en charge en V0.1")
+            raise ValueError("Graines non EVM non prises en charge")
         if self.kind == "address":
             self.reference = AddressId.evm(self.chain_id, self.reference).key
+            if set(self.window) == {"start_block", "end_block"}:
+                if any(not re.fullmatch(r"0|[1-9][0-9]{0,19}", value) for value in self.window.values()):
+                    raise ValueError("Bornes de blocs décimales canoniques attendues")
+                start, end = int(self.window["start_block"]), int(self.window["end_block"])
+                if end < start or end - start >= 10000 or end >= 2**64:
+                    raise ValueError("Plage ordonnée limitée à 10 000 blocs et aux hauteurs uint64")
+                return self
             if set(self.window) != {"start", "end"}:
-                raise ValueError("Une adresse exige une période start/end ISO 8601")
+                raise ValueError("Une adresse exige start_block/end_block ou une période start/end ISO 8601")
             try:
                 start, end = (datetime.fromisoformat(self.window[key]) for key in ("start", "end"))
                 if start.tzinfo is None or end.tzinfo is None or end < start:
@@ -125,6 +132,7 @@ class ObservationView(ReadModel):
     evidence_ref: str
     is_demo: bool
     asset: AssetView
+    bundle_id: str | None = None
 
 
 class MovementView(BaseModel):
@@ -154,11 +162,37 @@ class SnapshotView(ReadModel):
 
 
 class CapabilityView(BaseModel):
-    version: Literal["0.1.0"] = "0.1.0"
-    mode: Literal["local_foundation"] = "local_foundation"
+    version: Literal["0.2.0"] = "0.2.0"
+    mode: Literal["local_ethereum"] = "local_ethereum"
     notice: str
     providers: list["Capabilities"]
 
 
 from connectors.contracts import Capabilities
 CapabilityView.model_rebuild()
+
+
+from connectors.contracts import BlockRange
+
+
+class RunCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    block_range: BlockRange | None = None
+    max_transactions: int = Field(default=10, ge=1, le=20, strict=True)
+
+    @model_validator(mode="after")
+    def bounded(self):
+        if self.block_range and (self.block_range.end - self.block_range.start >= 10000 or self.block_range.end >= 2**64):
+            raise ValueError("Plage limitée à 10 000 blocs et aux hauteurs uint64")
+        return self
+
+
+class BundleView(ReadModel):
+    id: str
+    chain_id: str
+    block_hash: str
+    block_number: str
+    tx_hash: str
+    transaction_status: int
+    snapshot_id: str
+    normalization_limits: list[str]

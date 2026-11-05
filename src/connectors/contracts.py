@@ -3,6 +3,7 @@ from typing import Generic, Protocol, TypeVar
 
 from pydantic import BaseModel, Field, model_validator
 from investigation.domain import CoverageStatus, validate_chain
+from connectors.transport import Evidence
 
 T = TypeVar("T")
 
@@ -32,7 +33,7 @@ class Capabilities(BaseModel):
     quota: str = "non configuré"
     cost: str = "inconnu"
     protocols: list[str] = Field(default_factory=list)
-    limits: list[str] = Field(default_factory=lambda: ["Aucun fournisseur réel en V0.1"])
+    limits: list[str] = Field(default_factory=lambda: ["Aucun fournisseur configuré"])
 
 
 class ProviderResult(BaseModel, Generic[T]):
@@ -47,6 +48,7 @@ class ProviderResult(BaseModel, Generic[T]):
     limits: list[str] = Field(default_factory=list)
     finality: dict = Field(default_factory=lambda: {"status": "unknown"})
     evidence_refs: list[str] = Field(default_factory=list)
+    artifacts: list[Evidence] = Field(default_factory=list)
 
 
 class BlockchainProvider(Protocol):
@@ -68,7 +70,7 @@ class UnavailableProvider:
             source="unconfigured", retrieved_at=datetime.now(timezone.utc),
             chain_id=validate_chain(chain), status=CoverageStatus.UNSUPPORTED,
             requested_range=block_range, cursor=cursor,
-            limits=["V0.1 : collecte non implémentée ; aucune donnée réelle récupérée"],
+            limits=["Fournisseur non configuré ou réseau non pris en charge"],
         )
 
     def discover_address_activity(self, address: str, block_range: BlockRange, cursor=None):
