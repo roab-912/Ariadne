@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools==80.9.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ariadne-investigation"
+version = "0.1.0"
+description = "Fondations locales d'investigation blockchain — démonstration synthétique"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi==0.115.12",
+  "uvicorn==0.34.2",
+  "pydantic==2.12.5",
+  "SQLAlchemy==2.0.44",
+  "alembic==1.17.2",
+  "psycopg[binary]==3.3.2",
+  "redis==7.1.0",
+]
+
+[project.optional-dependencies]
+test = ["pytest==9.0.2", "httpx==0.28.1"]
+
+[tool.setuptools.packages.find]
+where = ["src", "."]
+include = ["investigation*", "connectors*", "decoders*", "workers*", "apps", "apps.api*"]
+namespaces = true
+
+[tool.setuptools.package-data]
+investigation = ["fixtures/*.json"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["postgres: nécessite TEST_DATABASE_URL vers une base PostgreSQL de test vide"]

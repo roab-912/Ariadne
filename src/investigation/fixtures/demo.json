@@ -1,0 +1,23 @@
+{
+  "notice": "Démonstration — scénario entièrement synthétique, sans transaction réelle ni attribution d'identité",
+  "version": "demo-v0.1",
+  "chain_id": "eip155:1",
+  "asset": {"symbol": "ETH", "decimals": 18},
+  "addresses": [
+    "0x1111111111111111111111111111111111111111",
+    "0x2222222222222222222222222222222222222222",
+    "0x3333333333333333333333333333333333333333",
+    "0x4444444444444444444444444444444444444444"
+  ],
+  "movements": [
+    {"block_number": "100", "block_hash": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "parent_hash": "0x0000000000000000000000000000000000000000000000000000000000000000", "tx_hash": "0xdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd", "transaction_index": 0, "origin": "top_level", "position": "0", "observed_at": "2026-01-01T12:00:00Z", "from": 0, "to": 1, "amount_raw": "1000000000000000001"},
+    {"block_number": "101", "block_hash": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "parent_hash": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "tx_hash": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee", "transaction_index": 0, "origin": "top_level", "position": "0", "observed_at": "2026-01-01T12:00:12Z", "from": 1, "to": 2, "amount_raw": "600000000000000000"},
+    {"block_number": "101", "block_hash": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "parent_hash": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "tx_hash": "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "transaction_index": 1, "origin": "top_level", "position": "0", "observed_at": "2026-01-01T12:00:12Z", "from": 1, "to": 3, "amount_raw": "400000000000000001"}
+  ],
+  "limits": [
+    "Aucune donnée issue d'une blockchain réelle",
+    "Frais et soldes initiaux hors scénario ; aucune allocation calculée",
+    "Aucun lien inter-chaînes, label d'entité ou prix",
+    "Finalité et canonicalité réelles inconnues"
+  ]
+}

@@ -1,0 +1,107 @@
+name: ariadne
+services:
+  postgres:
+    image: postgres:17.7-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-ariadne}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ariadne_local_only}
+      POSTGRES_DB: ${POSTGRES_DB:-ariadne}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+  redis:
+    image: redis:7.4.7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+  migrate:
+    build:
+      context: .
+      dockerfile: infra/api.Dockerfile
+    environment: &backend_environment
+      DB_HOST: postgres
+      DB_USER: ${POSTGRES_USER:-ariadne}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-ariadne_local_only}
+      DB_NAME: ${POSTGRES_DB:-ariadne}
+      REDIS_URL: redis://redis:6379/0
+    command: ["alembic", "upgrade", "head"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+  demo:
+    build:
+      context: .
+      dockerfile: infra/api.Dockerfile
+    environment: *backend_environment
+    command: ["python", "-m", "investigation.demo"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+  api:
+    build:
+      context: .
+      dockerfile: infra/api.Dockerfile
+    environment: *backend_environment
+    ports:
+      - "127.0.0.1:${API_PORT:-8000}:8000"
+    depends_on:
+      demo:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready')"]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+  web:
+    build:
+      context: .
+      dockerfile: infra/web.Dockerfile
+    ports:
+      - "127.0.0.1:${WEB_PORT:-8080}:80"
+    depends_on:
+      api:
+        condition: service_healthy
+  test-postgres:
+    profiles: ["verification"]
+    image: postgres:17.7-alpine
+    environment:
+      POSTGRES_USER: ariadne
+      POSTGRES_PASSWORD: test_only
+      POSTGRES_DB: ariadne_test
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ariadne -d ariadne_test"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+  tests:
+    profiles: ["verification"]
+    build:
+      context: .
+      dockerfile: infra/api.Dockerfile
+    environment:
+      TEST_DATABASE_URL: postgresql+psycopg://ariadne:test_only@test-postgres:5432/ariadne_test
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - ./tests:/app/tests:ro
+    command: ["python", "-m", "pytest", "-q", "-p", "no:cacheprovider"]
+    depends_on:
+      test-postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+volumes:
+  postgres_data:
+  redis_data:
